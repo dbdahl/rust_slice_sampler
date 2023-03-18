@@ -7,7 +7,7 @@ layout {
     }
     pane split_direction="vertical" {
         pane command="cargo" {
-            args "test"
+            args "test" "--" "--nocapture"
         }
         pane command="bacon"
     }

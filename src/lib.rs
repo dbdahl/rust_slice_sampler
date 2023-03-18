@@ -10,10 +10,19 @@ pub struct TuningParameters {
 }
 
 impl TuningParameters {
-    pub fn with_width(width: f64) -> Self {
+    pub fn new() -> Self {
+        Default::default()
+    }
+    pub fn width(self, value: f64) -> Self {
         Self {
-            width,
-            ..Self::default()
+            width: value,
+            ..self
+        }
+    }
+    pub fn max_number_of_steps(self, value: u32) -> Self {
+        Self {
+            max_number_of_steps: value,
+            ..self
         }
     }
 }
@@ -31,7 +40,7 @@ impl Default for TuningParameters {
 pub fn slice_sampler_stepping_out<S: UnivariateTarget>(
     x: f64,
     f: S,
-    tuning_parameters: TuningParameters,
+    tuning_parameters: &TuningParameters,
     rng: Option<&fastrand::Rng>,
 ) -> (f64, u32) {
     let w = if tuning_parameters.width <= 0.0 {
@@ -100,17 +109,39 @@ pub fn slice_sampler_stepping_out<S: UnivariateTarget>(
     }
 }
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn test_triangle_distribution() {
+        struct A;
+        impl UnivariateTarget for A {
+            fn evaluate(&self, x: f64) -> f64 {
+                if x < 0.0 || x > 1.0 {
+                    0.0
+                } else {
+                    x
+                }
+            }
+            fn on_log_scale(&self) -> bool {
+                false
+            }
+        }
+        let mut sum = 0.0;
+        let n_samples = 100_000;
+        let tuning_parameters = TuningParameters::new().width(1.0);
+        let mut x = 0.5;
+        let mut total_calls = 0;
+        for _ in 0..n_samples {
+            let calls;
+            (x, calls) = slice_sampler_stepping_out(x, A, &tuning_parameters, None);
+            total_calls += calls;
+            sum += x;
+        }
+        let mean = sum / (n_samples as f64);
+        let diff = (mean - 2. / 3.).abs();
+        println!("{}", (total_calls as f64) / (n_samples as f64));
+        assert!(diff < 0.01);
     }
 }
