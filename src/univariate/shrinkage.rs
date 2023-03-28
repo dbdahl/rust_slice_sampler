@@ -3,7 +3,7 @@ use super::*;
 /// Neal (2003) univariate slice sampler using the stepping out and shrinkage procedures
 pub fn univariate_slice_sampler_shrinkage<S: UnivariateTarget>(
     x: f64,
-    f: S,
+    mut f: S,
     left: f64,
     right: f64,
     rng: Option<&fastrand::Rng>,
@@ -18,6 +18,7 @@ pub fn univariate_slice_sampler_shrinkage<S: UnivariateTarget>(
     };
     let u = || rng.f64();
     let mut evaluation_counter = 0;
+    let on_log_scale = f.on_log_scale();
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
         f.evaluate(x)
@@ -26,7 +27,7 @@ pub fn univariate_slice_sampler_shrinkage<S: UnivariateTarget>(
     let y = {
         let u: f64 = u();
         let fx = f_with_counter(x);
-        if f.on_log_scale() {
+        if on_log_scale {
             u.ln() + fx
         } else {
             u * fx
