@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub struct TuningParameters {
     initial_width: f64,
-    max_number_of_steps: u32,
+    max_number_of_doubles: u32,
 }
 
 impl TuningParameters {
@@ -18,7 +18,7 @@ impl TuningParameters {
     }
     pub fn max_number_of_steps(self, value: u32) -> Self {
         Self {
-            max_number_of_steps: value,
+            max_number_of_doubles: value,
             ..self
         }
     }
@@ -28,13 +28,13 @@ impl Default for TuningParameters {
     fn default() -> Self {
         TuningParameters {
             initial_width: 1.0,
-            max_number_of_steps: 0,
+            max_number_of_doubles: 0,
         }
     }
 }
 
-/// Neal (2003) univariate slice sampler using the stepping out and shrinkage procedures
-pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: UnivariateTarget>(
+/// Neal (2003) univariate slice sampler using the doubling and shrinkage procedures
+pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
     x: f64,
     mut f: S,
     tuning_parameters: &TuningParameters,
@@ -70,29 +70,32 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: UnivariateTarget>(
             u * fx
         }
     };
-    // Step 2 (stepping out, unless max_number_of_steps == 1)
+    // Step 2 (doubling, unless max_number_of_steps == 1)
     let mut l = x - u() * w;
     let mut r = l + w;
-    match tuning_parameters.max_number_of_steps {
+    match tuning_parameters.max_number_of_doubles {
         0 => {
-            while y < f_with_counter(l) {
-                l -= w
-            }
-            while y < f_with_counter(r) {
-                r += w
+            while y < f_with_counter(l) && y < f_with_counter(r) {
+                let v: f64 = u();
+                if v < 0.5 {
+                    l -= r - l;
+                } else {
+                    r -= r - l;
+                }
             }
         }
         1 => {}
         _ => {
-            let mut j = (u() * (tuning_parameters.max_number_of_steps as f64)).floor() as u32;
-            let mut k = tuning_parameters.max_number_of_steps - 1 - j;
-            while j > 0 && y < f_with_counter(l) {
-                l -= w;
-                j -= 1;
-            }
-            while k > 0 && y < f_with_counter(r) {
-                r += w;
-                k -= 1;
+            let mut k = tuning_parameters.max_number_of_doubles;
+            while k > 0 && (y < f_with_counter(l) || y < f_with_counter(r)) {
+                let v: f64 = u();
+                if v < 0.5 {
+                    l -= r - l;
+                    k -= 1;
+                } else {
+                    r += r - l;
+                    k -= 1;
+                }
             }
         }
     }
@@ -101,7 +104,28 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: UnivariateTarget>(
         let x1 = l + u() * (r - l);
         let fx1 = f_with_counter(x1);
         if y < fx1 {
-            return (x1, evaluation_counter);
+            let mut lp = l;
+            let mut rp = r;
+            let mut d = false;
+            let mut accept = true;
+            while rp - lp > 1.1 * w as f64 {
+                let m = (lp + rp) / 2.0;
+                if (x < m && x1 >= m) || (x >= m && x1 < m) {
+                    d = true;
+                }
+                if x1 < m {
+                    rp = m;
+                } else {
+                    lp = m;
+                }
+                if d && y >= f_with_counter(lp) && y >= f_with_counter(rp) {
+                    accept = false;
+                    break;
+                }
+            }
+            if accept {
+                return (x1, evaluation_counter);
+            }
         }
         if x1 < x {
             l = x1;
@@ -138,7 +162,7 @@ mod tests {
         for _ in 0..n_samples {
             let calls;
             (x, calls) =
-                univariate_slice_sampler_stepping_out_and_shrinkage(x, A, &tuning_parameters, None);
+                univariate_slice_sampler_doubling_and_shrinkage(x, A, &tuning_parameters, None);
             total_calls += calls;
             sum += x;
         }

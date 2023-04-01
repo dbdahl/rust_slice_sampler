@@ -58,7 +58,7 @@ mod tests {
     fn test_triangle_distribution() {
         struct A;
         impl UnivariateTarget for A {
-            fn evaluate(&self, x: f64) -> f64 {
+            fn evaluate(&mut self, x: f64) -> f64 {
                 if x < 0.0 || x > 1.0 {
                     0.0
                 } else {
