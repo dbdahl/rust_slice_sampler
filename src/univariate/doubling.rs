@@ -16,7 +16,7 @@ impl TuningParameters {
             ..self
         }
     }
-    pub fn max_number_of_steps(self, value: u32) -> Self {
+    pub fn max_number_of_doubles(self, value: u32) -> Self {
         Self {
             max_number_of_doubles: value,
             ..self
@@ -62,12 +62,11 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
     };
     // Step 1 (slice)
     let y = {
-        let u: f64 = u();
         let fx = f_with_counter(x);
         if on_log_scale {
-            u.ln() + fx
+            u().ln() + fx
         } else {
-            u * fx
+            u() * fx
         }
     };
     // Step 2 (doubling, unless max_number_of_steps == 1)
@@ -76,11 +75,11 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
     match tuning_parameters.max_number_of_doubles {
         0 => {
             while y < f_with_counter(l) && y < f_with_counter(r) {
-                let v: f64 = u();
-                if v < 0.5 {
-                    l -= r - l;
+                let w = r - l;
+                if u() < 0.5 {
+                    l -= w;
                 } else {
-                    r -= r - l;
+                    r += w;
                 }
             }
         }
@@ -88,13 +87,12 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
         _ => {
             let mut k = tuning_parameters.max_number_of_doubles;
             while k > 0 && (y < f_with_counter(l) || y < f_with_counter(r)) {
-                let v: f64 = u();
-                if v < 0.5 {
-                    l -= r - l;
-                    k -= 1;
+                k -= 1;
+                let w = r - l;
+                if u() < 0.5 {
+                    l -= w;
                 } else {
-                    r += r - l;
-                    k -= 1;
+                    r += w;
                 }
             }
         }
@@ -108,7 +106,7 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
             let mut rp = r;
             let mut d = false;
             let mut accept = true;
-            while rp - lp > 1.1 * w as f64 {
+            while rp - lp > 1.1 * w {
                 let m = (lp + rp) / 2.0;
                 if (x < m && x1 >= m) || (x >= m && x1 < m) {
                     d = true;

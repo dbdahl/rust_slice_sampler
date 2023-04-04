@@ -62,12 +62,11 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: UnivariateTarget>(
     };
     // Step 1 (slice)
     let y = {
-        let u: f64 = u();
         let fx = f_with_counter(x);
         if on_log_scale {
-            u.ln() + fx
+            u().ln() + fx
         } else {
-            u * fx
+            u() * fx
         }
     };
     // Step 2 (stepping out, unless max_number_of_steps == 1)
