@@ -1,5 +1,3 @@
-use super::*;
-
 #[derive(Debug)]
 pub struct TuningParameters {
     initial_width: f64,
@@ -34,9 +32,10 @@ impl Default for TuningParameters {
 }
 
 /// Neal (2003) univariate slice sampler using the doubling and shrinkage procedures
-pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
+pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
+    on_log_scale: bool,
     tuning_parameters: &TuningParameters,
     rng: Option<&fastrand::Rng>,
 ) -> (f64, u32) {
@@ -55,10 +54,9 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: UnivariateTarget>(
     };
     let u = || rng.f64();
     let mut evaluation_counter = 0;
-    let on_log_scale = f.on_log_scale();
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
-        f.evaluate(x)
+        f(x)
     };
     // Step 1 (slice)
     let y = {
@@ -139,19 +137,6 @@ mod tests {
 
     #[test]
     fn test_triangle_distribution() {
-        struct A;
-        impl UnivariateTarget for A {
-            fn evaluate(&mut self, x: f64) -> f64 {
-                if x < 0.0 || x > 1.0 {
-                    0.0
-                } else {
-                    x
-                }
-            }
-            fn on_log_scale(&self) -> bool {
-                false
-            }
-        }
         let mut sum = 0.0;
         let n_samples = 100_000;
         let tuning_parameters = TuningParameters::new().width(1.);
@@ -159,8 +144,19 @@ mod tests {
         let mut total_calls = 0;
         for _ in 0..n_samples {
             let calls;
-            (x, calls) =
-                univariate_slice_sampler_doubling_and_shrinkage(x, A, &tuning_parameters, None);
+            (x, calls) = univariate_slice_sampler_doubling_and_shrinkage(
+                x,
+                |x| {
+                    if x < 0.0 || x > 1.0 {
+                        0.0
+                    } else {
+                        x
+                    }
+                },
+                false,
+                &tuning_parameters,
+                None,
+            );
             total_calls += calls;
             sum += x;
         }

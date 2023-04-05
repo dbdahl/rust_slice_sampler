@@ -1,9 +1,8 @@
-use super::*;
-
 /// Neal (2003) univariate slice sampler using the stepping out and shrinkage procedures
-pub fn univariate_slice_sampler_shrinkage<S: UnivariateTarget>(
+pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
+    on_log_scale: bool,
     left: f64,
     right: f64,
     rng: Option<&fastrand::Rng>,
@@ -18,10 +17,9 @@ pub fn univariate_slice_sampler_shrinkage<S: UnivariateTarget>(
     };
     let u = || rng.f64();
     let mut evaluation_counter = 0;
-    let on_log_scale = f.on_log_scale();
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
-        f.evaluate(x)
+        f(x)
     };
     // Step 1 (slice)
     let y = {
@@ -56,26 +54,26 @@ mod tests {
 
     #[test]
     fn test_triangle_distribution() {
-        struct A;
-        impl UnivariateTarget for A {
-            fn evaluate(&mut self, x: f64) -> f64 {
-                if x < 0.0 || x > 1.0 {
-                    0.0
-                } else {
-                    x
-                }
-            }
-            fn on_log_scale(&self) -> bool {
-                false
-            }
-        }
         let mut sum = 0.0;
         let n_samples = 100_000;
         let mut x = 0.5;
         let mut total_calls = 0;
         for _ in 0..n_samples {
             let calls;
-            (x, calls) = univariate_slice_sampler_shrinkage(x, A, 0., 1., None);
+            (x, calls) = univariate_slice_sampler_shrinkage(
+                x,
+                |x| {
+                    if x < 0.0 || x > 1.0 {
+                        0.0
+                    } else {
+                        x
+                    }
+                },
+                false,
+                0.,
+                1.,
+                None,
+            );
             total_calls += calls;
             sum += x;
         }
