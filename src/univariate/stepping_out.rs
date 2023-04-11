@@ -31,7 +31,7 @@ impl Default for TuningParameters {
     }
 }
 
-/// Neal (2003) univariate slice sampler using the stepping out and shrinkage procedures
+// Neal (2003) univariate slice sampler using the stepping out and shrinkage procedures
 pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
