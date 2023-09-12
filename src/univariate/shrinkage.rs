@@ -5,7 +5,7 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     on_log_scale: bool,
     left: f64,
     right: f64,
-    rng: Option<&mut fastrand::Rng>,
+    rng: &mut Option<fastrand::Rng>,
 ) -> (f64, u32) {
     let mut maybe;
     let rng = match rng {

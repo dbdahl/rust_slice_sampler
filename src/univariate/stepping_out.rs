@@ -37,7 +37,7 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: FnMut(f64) -> f64>
     mut f: S,
     on_log_scale: bool,
     tuning_parameters: &TuningParameters,
-    rng: Option<&mut fastrand::Rng>,
+    rng: &mut Option<fastrand::Rng>,
 ) -> (f64, u32) {
     let w = if tuning_parameters.initial_width <= 0.0 {
         f64::MIN_POSITIVE
