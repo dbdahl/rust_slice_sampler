@@ -37,22 +37,22 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     mut f: S,
     on_log_scale: bool,
     tuning_parameters: &TuningParameters,
-    rng: Option<&fastrand::Rng>,
+    rng: Option<&mut fastrand::Rng>,
 ) -> (f64, u32) {
     let w = if tuning_parameters.initial_width <= 0.0 {
         f64::MIN_POSITIVE
     } else {
         tuning_parameters.initial_width
     };
-    let maybe;
+    let mut maybe;
     let rng = match rng {
         Some(rng) => rng,
         None => {
             maybe = fastrand::Rng::new();
-            &maybe
+            &mut maybe
         }
     };
-    let u = || rng.f64();
+    let mut u = || rng.f64();
     let mut evaluation_counter = 0;
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
