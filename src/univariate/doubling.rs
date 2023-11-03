@@ -147,7 +147,7 @@ mod tests {
             (x, calls) = univariate_slice_sampler_doubling_and_shrinkage(
                 x,
                 |x| {
-                    if x < 0.0 || x > 1.0 {
+                    if !(0.0..=1.0).contains(&x) {
                         0.0
                     } else {
                         x
@@ -155,7 +155,7 @@ mod tests {
                 },
                 false,
                 &tuning_parameters,
-                None,
+                &mut None,
             );
             total_calls += calls;
             sum += x;
