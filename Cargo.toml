@@ -2,7 +2,7 @@
 name = "slice_sampler"
 version = "0.1.2"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.85.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
