@@ -19,6 +19,8 @@ impl TuningParameters {
             ..self
         }
     }
+    /// Sets the greatest number of times the interval may double, or 0, the
+    /// default, for no limit.
     pub fn max_number_of_doubles(self, value: u32) -> Self {
         Self {
             max_number_of_doubles: value,
@@ -71,12 +73,12 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
         let fx = f_with_counter(x);
         super::level(x, fx, on_log_scale, u())
     };
-    // Step 2 (doubling, unless max_number_of_steps == 1)
+    // Step 2 (doubling while either end is in the slice, as in Neal's Fig. 4)
     let mut l = x - u() * w;
     let mut r = l + w;
     match tuning_parameters.max_number_of_doubles {
         0 => {
-            while y < f_with_counter(l) && y < f_with_counter(r) {
+            while y < f_with_counter(l) || y < f_with_counter(r) {
                 let w = r - l;
                 if u() < 0.5 {
                     l -= w;
@@ -85,7 +87,6 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
                 }
             }
         }
-        1 => {}
         _ => {
             let mut k = tuning_parameters.max_number_of_doubles;
             while k > 0 && (y < f_with_counter(l) || y < f_with_counter(r)) {

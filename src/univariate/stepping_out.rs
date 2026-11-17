@@ -19,6 +19,8 @@ impl TuningParameters {
             ..self
         }
     }
+    /// Sets the greatest size of the interval, in widths, or 0, the default,
+    /// for no limit. With 1, the interval doesn't step out.
     pub fn max_number_of_steps(self, value: u32) -> Self {
         Self {
             max_number_of_steps: value,
