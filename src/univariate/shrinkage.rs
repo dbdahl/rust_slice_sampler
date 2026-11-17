@@ -1,4 +1,13 @@
-// Neal (2003) univariate slice sampler using shrinkage procedures
+/// Neal (2003) univariate slice sampler using the shrinkage procedure on the
+/// interval from `left` to `right`, from `x` with the density, or its
+/// logarithm if `on_log_scale`, `f`. It returns the new point and the number
+/// of evaluations of `f`.
+///
+/// # Panics
+///
+/// If `left` and `right` aren't finite, if `x` isn't between them, or if `x`
+/// isn't in the target's support: its density must be positive and finite.
+/// Otherwise the shrinkage procedure may never end.
 pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -7,6 +16,10 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     right: f64,
     rng: &mut Option<fastrand::Rng>,
 ) -> (f64, u32) {
+    assert!(
+        left.is_finite() && right.is_finite() && left <= x && x <= right,
+        "the starting point {x} must be in the finite interval from {left} to {right}"
+    );
     let mut maybe;
     let rng = match rng {
         Some(rng) => rng,
@@ -25,11 +38,7 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     let y = {
         let u: f64 = u();
         let fx = f_with_counter(x);
-        if on_log_scale {
-            u.ln() + fx
-        } else {
-            u * fx
-        }
+        super::level(x, fx, on_log_scale, u)
     };
     // Step 3 (shrinkage)
     let mut l = left;
@@ -63,11 +72,7 @@ mod tests {
             (x, calls) = univariate_slice_sampler_shrinkage(
                 x,
                 |x| {
-                    if !(0.0..=1.0).contains(&x) {
-                        0.0
-                    } else {
-                        x
-                    }
+                    if !(0.0..=1.0).contains(&x) { 0.0 } else { x }
                 },
                 false,
                 0.,

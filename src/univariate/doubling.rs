@@ -8,9 +8,14 @@ impl TuningParameters {
     pub fn new() -> Self {
         Default::default()
     }
+    /// Sets the initial width of the interval around the starting point.
+    ///
+    /// # Panics
+    ///
+    /// If `value` isn't positive and finite.
     pub fn width(self, value: f64) -> Self {
         Self {
-            initial_width: value,
+            initial_width: super::checked_width(value),
             ..self
         }
     }
@@ -31,7 +36,14 @@ impl Default for TuningParameters {
     }
 }
 
-// Neal (2003) univariate slice sampler using the doubling and shrinkage procedures
+/// Neal (2003) univariate slice sampler using the doubling and shrinkage
+/// procedures, from `x` with the density, or its logarithm if `on_log_scale`,
+/// `f`. It returns the new point and the number of evaluations of `f`.
+///
+/// # Panics
+///
+/// If `x` isn't in the target's support: `x` must be finite, and its density
+/// positive and finite. Otherwise the shrinkage procedure may never end.
 pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -39,11 +51,7 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     tuning_parameters: &TuningParameters,
     rng: &mut Option<fastrand::Rng>,
 ) -> (f64, u32) {
-    let w = if tuning_parameters.initial_width <= 0.0 {
-        f64::MIN_POSITIVE
-    } else {
-        tuning_parameters.initial_width
-    };
+    let w = tuning_parameters.initial_width;
     let mut maybe;
     let rng = match rng {
         Some(rng) => rng,
@@ -61,11 +69,7 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     // Step 1 (slice)
     let y = {
         let fx = f_with_counter(x);
-        if on_log_scale {
-            u().ln() + fx
-        } else {
-            u() * fx
-        }
+        super::level(x, fx, on_log_scale, u())
     };
     // Step 2 (doubling, unless max_number_of_steps == 1)
     let mut l = x - u() * w;
@@ -147,11 +151,7 @@ mod tests {
             (x, calls) = univariate_slice_sampler_doubling_and_shrinkage(
                 x,
                 |x| {
-                    if !(0.0..=1.0).contains(&x) {
-                        0.0
-                    } else {
-                        x
-                    }
+                    if !(0.0..=1.0).contains(&x) { 0.0 } else { x }
                 },
                 false,
                 &tuning_parameters,
