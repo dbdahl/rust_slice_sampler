@@ -1,13 +1,17 @@
+use super::SliceError;
+
 /// Neal (2003) univariate slice sampler using the shrinkage procedure on the
 /// interval from `left` to `right`, from `x` with the density, or its
 /// logarithm if `on_log_scale`, `f`. It returns the new point and the number
-/// of evaluations of `f`.
+/// of evaluations of `f`. [`try_univariate_slice_sampler_shrinkage`] takes an
+/// `f` that may fail.
 ///
 /// # Panics
 ///
 /// If `left` and `right` aren't finite, if `x` isn't between them, or if `x`
-/// isn't in the target's support: its density must be positive and finite.
-/// Otherwise the shrinkage procedure may never end.
+/// isn't in the target's support: its density must be positive and finite
+/// (or its log density finite if `on_log_scale`). Otherwise the shrinkage
+/// procedure may never end.
 pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -16,6 +20,46 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     right: f64,
     rng: &mut Option<fastrand::Rng>,
 ) -> (f64, u32) {
+    super::infallible(try_univariate_slice_sampler_shrinkage(
+        x,
+        |x| Ok(f(x)),
+        on_log_scale,
+        left,
+        right,
+        rng,
+    ))
+}
+
+/// Neal (2003) univariate slice sampler using the shrinkage procedure on the
+/// interval from `left` to `right`, from `x` with the density, or its
+/// logarithm if `on_log_scale`, `f`, which may fail. It returns the new point
+/// and the number of evaluations of `f`.
+///
+/// See the [module examples](super) for propagating errors and using
+/// infallible targets.
+///
+/// # Errors
+///
+/// [`SliceError::Target`] with `f`'s first error, after which `f` isn't
+/// called again, or [`SliceError::InvalidStart`] if `x` isn't in the target's
+/// support: its density must be positive and finite (or its log density
+/// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
+/// end.
+///
+/// # Panics
+///
+/// If `left` and `right` aren't finite, or if `x` isn't between them.
+pub fn try_univariate_slice_sampler_shrinkage<E, S>(
+    x: f64,
+    mut f: S,
+    on_log_scale: bool,
+    left: f64,
+    right: f64,
+    rng: &mut Option<fastrand::Rng>,
+) -> Result<(f64, u32), SliceError<E>>
+where
+    S: FnMut(f64) -> Result<f64, E>,
+{
     assert!(
         left.is_finite() && right.is_finite() && left <= x && x <= right,
         "the starting point {x} must be in the finite interval from {left} to {right}"
@@ -32,22 +76,22 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     let mut evaluation_counter = 0;
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
-        f(x)
+        f(x).map_err(SliceError::Target)
     };
     // Step 1 (slice)
     let y = {
         let u: f64 = u();
-        let fx = f_with_counter(x);
-        super::level(x, fx, on_log_scale, u)
+        let fx = f_with_counter(x)?;
+        super::level(x, fx, on_log_scale, u)?
     };
     // Step 3 (shrinkage)
     let mut l = left;
     let mut r = right;
     loop {
         let x1 = l + u() * (r - l);
-        let fx1 = f_with_counter(x1);
+        let fx1 = f_with_counter(x1)?;
         if y < fx1 {
-            return (x1, evaluation_counter);
+            return Ok((x1, evaluation_counter));
         }
         if x1 < x {
             l = x1;
