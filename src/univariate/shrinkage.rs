@@ -8,12 +8,11 @@ use super::SliceError;
 ///
 /// # Panics
 ///
-/// If `left` and `right` aren't finite, if `x` isn't between them, or if `x`
-/// isn't in the target's support: its density must be positive and finite
-/// (or its log density finite if `on_log_scale`). Otherwise the shrinkage
-/// procedure may never end.
-/// Also panics if the interval's width is zero or overflows; the `try_`
-/// form returns [`SliceError::Numerical`] instead.
+/// If `left` and `right` aren't finite, if the interval's width, `right -
+/// left`, overflows, if `x` isn't between them, or if `x` isn't in the
+/// target's support: its density must be positive and finite (or its log
+/// density finite if `on_log_scale`). Otherwise the shrinkage procedure may
+/// never end. An interval of one point, `x`, gives `x`.
 pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -42,16 +41,16 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
 ///
 /// # Errors
 ///
-/// [`SliceError::Target`] with `f`'s first error, after which `f` isn't
-/// called again, or [`SliceError::InvalidStart`] if `x` isn't in the target's
-/// support: its density must be positive and finite (or its log density
-/// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
-/// end.
-/// [`SliceError::Numerical`] if the interval's width is zero or overflows.
+/// - [`SliceError::Target`] with `f`'s first error, after which `f` isn't
+///   called again.
+/// - [`SliceError::InvalidStart`] if `x` isn't in the target's support: its
+///   density must be positive and finite (or its log density finite if
+///   `on_log_scale`), or the shrinkage procedure might never end.
 ///
 /// # Panics
 ///
-/// If `left` and `right` aren't finite, or if `x` isn't between them.
+/// If `left` and `right` aren't finite, if the interval's width overflows, or
+/// if `x` isn't between them. An interval of one point, `x`, gives `x`.
 pub fn try_univariate_slice_sampler_shrinkage<E, S>(
     x: f64,
     mut f: S,
@@ -67,7 +66,15 @@ where
         left.is_finite() && right.is_finite() && left <= x && x <= right,
         "the starting point {x} must be in the finite interval from {left} to {right}"
     );
-    super::check_interval(left, right)?;
+    // The caller can check the width, so an overflow is a bug in the caller, as
+    // for the endpoints. Otherwise the first point would be infinite or NaN.
+    // A width of 0 is fine: the only point, x, is above the level. The
+    // endpoints of an overflowing width are huge, so they are shown in
+    // scientific notation.
+    assert!(
+        (right - left).is_finite(),
+        "the width of the interval from {left:e} to {right:e} must be finite"
+    );
     let mut maybe;
     let rng = match rng {
         Some(rng) => rng,

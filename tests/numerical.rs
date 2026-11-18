@@ -152,18 +152,21 @@ fn expansion_overflow_is_an_error_before_evaluating_infinity() {
     }
 }
 
+// Unlike a collapsed interval in the other samplers, which their width and
+// random draws produce, a one-point interval is the caller's to give, and its
+// only point is above the level.
 #[test]
-fn shrinkage_rejects_a_zero_or_overflowing_width() {
-    for (left, right) in [(0.0, 0.0), (-f64::MAX, f64::MAX)] {
+fn shrinkage_on_a_one_point_interval_gives_its_point() {
+    for x in [-1.0, 0.0, 0.5] {
         let result = try_univariate_slice_sampler_shrinkage(
-            0.0,
-            |_| -> Result<f64, ()> { panic!("the target was called") },
+            x,
+            |x| Ok::<_, ()>(-x * x / 2.0),
             true,
-            left,
-            right,
-            &mut None,
+            x,
+            x,
+            &mut Some(fastrand::Rng::with_seed(1)),
         );
-        assert_eq!(result, Err(SliceError::Numerical(NumericalError)));
+        assert_eq!(result, Ok((x, 2)));
     }
 }
 

@@ -124,6 +124,21 @@ fn shrinkage_on_an_infinite_interval() {
 }
 
 #[test]
+#[should_panic(
+    expected = "the width of the interval from -1.7976931348623157e308 to 1.7976931348623157e308 must be finite"
+)]
+fn shrinkage_on_an_interval_whose_width_overflows() {
+    univariate_slice_sampler_shrinkage(
+        0.0,
+        |_| panic!("the target was called"),
+        true,
+        -f64::MAX,
+        f64::MAX,
+        &mut None,
+    );
+}
+
+#[test]
 #[should_panic(expected = "the initial width is 0, but it must be positive and finite")]
 fn stepping_out_with_a_zero_width() {
     SteppingOutParameters::new().width(0.0);

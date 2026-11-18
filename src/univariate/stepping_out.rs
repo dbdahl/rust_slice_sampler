@@ -79,13 +79,13 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: FnMut(f64) -> f64>
 ///
 /// # Errors
 ///
-/// [`SliceError::Target`] with `f`'s first error, after which `f` isn't
-/// called again, or [`SliceError::InvalidStart`] if `x` isn't in the target's
-/// support: its density must be positive and finite (or its log density
-/// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
-/// end.
-/// [`SliceError::Numerical`] if the interval collapses, overflows, or an
-/// expansion cannot move an endpoint at floating-point precision.
+/// - [`SliceError::Target`] with `f`'s first error, after which `f` isn't
+///   called again.
+/// - [`SliceError::InvalidStart`] if `x` isn't in the target's support: its
+///   density must be positive and finite (or its log density finite if
+///   `on_log_scale`), or the shrinkage procedure might never end.
+/// - [`SliceError::Numerical`] if the interval collapses, overflows, or an
+///   expansion cannot move an endpoint at floating-point precision.
 ///
 /// # Panics
 ///
