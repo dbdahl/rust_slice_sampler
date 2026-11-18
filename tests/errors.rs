@@ -13,6 +13,12 @@ use slice_sampler::univariate::{InvalidStart, SliceError};
 use std::convert::Infallible;
 use std::error::Error;
 
+// Draws from the uniform distribution on [0, 1), from a seeded generator.
+fn seeded(seed: u64) -> impl FnMut() -> f64 {
+    let mut rng = fastrand::Rng::with_seed(seed);
+    move || rng.f64()
+}
+
 // The log density of a Beta(2, 2), which is -inf outside (0, 1).
 fn log_beta(x: f64) -> f64 {
     if 0.0 < x && x < 1.0 {
@@ -26,23 +32,23 @@ type Sampler = fn(
     f64,
     &mut dyn FnMut(f64) -> Result<f64, usize>,
     bool,
-    &mut Option<fastrand::Rng>,
+    &mut dyn FnMut() -> f64,
 ) -> Result<(f64, u32), SliceError<usize>>;
 
 // Each sampler, with a narrow width so that a draw steps out or doubles.
 fn samplers() -> [(&'static str, Sampler); 5] {
     [
-        ("stepping out", |x, f, log, rng| {
+        ("stepping out", |x, f, log, uniform| {
             let tuning_parameters = SteppingOutParameters::new().width(0.05);
             try_univariate_slice_sampler_stepping_out_and_shrinkage(
                 x,
                 f,
                 log,
                 &tuning_parameters,
-                rng,
+                uniform,
             )
         }),
-        ("stepping out, at most 4 steps", |x, f, log, rng| {
+        ("stepping out, at most 4 steps", |x, f, log, uniform| {
             let tuning_parameters = SteppingOutParameters::new()
                 .width(0.05)
                 .max_number_of_steps(4);
@@ -51,21 +57,33 @@ fn samplers() -> [(&'static str, Sampler); 5] {
                 f,
                 log,
                 &tuning_parameters,
-                rng,
+                uniform,
             )
         }),
-        ("doubling", |x, f, log, rng| {
+        ("doubling", |x, f, log, uniform| {
             let tuning_parameters = DoublingParameters::new().width(0.05);
-            try_univariate_slice_sampler_doubling_and_shrinkage(x, f, log, &tuning_parameters, rng)
+            try_univariate_slice_sampler_doubling_and_shrinkage(
+                x,
+                f,
+                log,
+                &tuning_parameters,
+                uniform,
+            )
         }),
-        ("doubling, at most 2 doubles", |x, f, log, rng| {
+        ("doubling, at most 2 doubles", |x, f, log, uniform| {
             let tuning_parameters = DoublingParameters::new()
                 .width(0.05)
                 .max_number_of_doubles(2);
-            try_univariate_slice_sampler_doubling_and_shrinkage(x, f, log, &tuning_parameters, rng)
+            try_univariate_slice_sampler_doubling_and_shrinkage(
+                x,
+                f,
+                log,
+                &tuning_parameters,
+                uniform,
+            )
         }),
-        ("shrinkage", |x, f, log, rng| {
-            try_univariate_slice_sampler_shrinkage(x, f, log, 0.0, 1.0, rng)
+        ("shrinkage", |x, f, log, uniform| {
+            try_univariate_slice_sampler_shrinkage(x, f, log, 0.0, 1.0, uniform)
         }),
     ]
 }
@@ -78,8 +96,8 @@ fn a_target_error_stops_the_sampler_at_once() {
             for _ in 0..20 {
                 // A successful draw, then the same draw failing at each of its
                 // evaluations in turn: every step's evaluations fail once.
-                let rng = || Some(fastrand::Rng::with_seed(seed));
-                let (next, n) = sampler(x, &mut |x| Ok(log_beta(x)), true, &mut rng())
+                let uniform = || seeded(seed);
+                let (next, n) = sampler(x, &mut |x| Ok(log_beta(x)), true, &mut uniform())
                     .unwrap_or_else(|e| panic!("{name}: {e}"));
                 for k in 1..=n as usize {
                     let mut calls = 0;
@@ -87,7 +105,7 @@ fn a_target_error_stops_the_sampler_at_once() {
                         calls += 1;
                         if calls == k { Err(k) } else { Ok(log_beta(x)) }
                     };
-                    let result = sampler(x, &mut f, true, &mut rng());
+                    let result = sampler(x, &mut f, true, &mut uniform());
                     assert_eq!(result, Err(SliceError::Target(k)), "{name}");
                     assert_eq!(calls, k, "{name}: the target was called after its error");
                 }
@@ -118,7 +136,7 @@ fn an_invalid_start_is_an_error() {
                 calls += 1;
                 Ok(fx)
             };
-            let Err(SliceError::InvalidStart(e)) = sampler(x, &mut f, on_log_scale, &mut None)
+            let Err(SliceError::InvalidStart(e)) = sampler(x, &mut f, on_log_scale, &mut seeded(1))
             else {
                 panic!("{name}: no error for a density of {fx} at {x}");
             };
@@ -185,7 +203,7 @@ fn an_infallible_target_needs_no_error_handling() {
         |x| Ok::<_, Infallible>(log_beta(x)),
         true,
         &tuning_parameters,
-        &mut None,
+        &mut seeded(1),
     );
     let (x, _) = match result {
         Ok(draw) => draw,
@@ -204,7 +222,7 @@ fn a_starting_point_that_is_not_finite_panics_before_any_evaluation() {
         |_| -> Result<f64, ()> { panic!("the target was called") },
         true,
         &DoublingParameters::new(),
-        &mut None,
+        &mut seeded(1),
     )
     .ok();
 }

@@ -5,6 +5,16 @@
 //! starting density returns [`SliceError::InvalidStart`]. An interval that
 //! collapses, overflows, or cannot advance returns [`SliceError::Numerical`].
 //!
+//! # Random numbers
+//!
+//! Each sampler takes its random numbers from `uniform`, a closure that
+//! returns draws from the uniform distribution on [0, 1), so the caller
+//! chooses the generator: `|| rng.f64()` for a `fastrand::Rng`, or `||
+//! rng.random::<f64>()` for a `rand` generator. A sampler draws in a fixed
+//! order, so a seeded generator makes its draws reproducible, and a caller
+//! that seeds its generator from another, such as R's, gets draws that
+//! follow it.
+//!
 //! # Fallible targets
 //!
 //! Use `?` to propagate sampler errors. Here the target returns a log density
@@ -22,13 +32,13 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let parameters = TuningParameters::new();
-//! let mut rng = Some(fastrand::Rng::with_seed(1));
+//! let mut rng = fastrand::Rng::with_seed(1);
 //! let (x, evaluations) = try_univariate_slice_sampler_stepping_out_and_shrinkage(
 //!     0.0,
 //!     log_density,
 //!     true,
 //!     &parameters,
-//!     &mut rng,
+//!     || rng.f64(),
 //! )?;
 //! assert!(x.is_finite());
 //! assert!(evaluations >= 2);
@@ -49,14 +59,14 @@
 //! use std::convert::Infallible;
 //!
 //! fn draw(x: f64) -> Result<f64, SliceError<Infallible>> {
-//!     let mut rng = Some(fastrand::Rng::with_seed(1));
+//!     let mut rng = fastrand::Rng::with_seed(1);
 //!     let (x, _) = try_univariate_slice_sampler_shrinkage(
 //!         x,
 //!         |x| Ok::<_, Infallible>(x),
 //!         false,
 //!         0.0,
 //!         1.0,
-//!         &mut rng,
+//!         || rng.f64(),
 //!     )?;
 //!     Ok(x)
 //! }

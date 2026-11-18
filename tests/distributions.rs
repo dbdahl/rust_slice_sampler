@@ -10,6 +10,12 @@ use slice_sampler::univariate::stepping_out::{
     TuningParameters as SteppingOutParameters, univariate_slice_sampler_stepping_out_and_shrinkage,
 };
 
+// Draws from the uniform distribution on [0, 1), from a seeded generator.
+fn seeded(seed: u64) -> impl FnMut() -> f64 {
+    let mut rng = fastrand::Rng::with_seed(seed);
+    move || rng.f64()
+}
+
 const N: usize = 200_000;
 
 fn normal(x: f64) -> f64 {
@@ -41,9 +47,10 @@ fn assert_moments(label: &str, (mean, variance): (f64, f64), expected: (f64, f64
 }
 
 fn doubling(f: fn(f64) -> f64, tuning_parameters: &DoublingParameters) -> impl FnMut(f64) -> f64 {
-    let mut rng = Some(fastrand::Rng::with_seed(1));
+    let mut uniform = seeded(1);
     move |x| {
-        univariate_slice_sampler_doubling_and_shrinkage(x, f, true, tuning_parameters, &mut rng).0
+        univariate_slice_sampler_doubling_and_shrinkage(x, f, true, tuning_parameters, &mut uniform)
+            .0
     }
 }
 
@@ -51,10 +58,16 @@ fn stepping_out(
     f: fn(f64) -> f64,
     tuning_parameters: &SteppingOutParameters,
 ) -> impl FnMut(f64) -> f64 {
-    let mut rng = Some(fastrand::Rng::with_seed(1));
+    let mut uniform = seeded(1);
     move |x| {
-        univariate_slice_sampler_stepping_out_and_shrinkage(x, f, true, tuning_parameters, &mut rng)
-            .0
+        univariate_slice_sampler_stepping_out_and_shrinkage(
+            x,
+            f,
+            true,
+            tuning_parameters,
+            &mut uniform,
+        )
+        .0
     }
 }
 

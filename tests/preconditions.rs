@@ -9,6 +9,12 @@ use slice_sampler::univariate::stepping_out::{
     TuningParameters as SteppingOutParameters, univariate_slice_sampler_stepping_out_and_shrinkage,
 };
 
+// Draws from the uniform distribution on [0, 1), from a seeded generator.
+fn seeded(seed: u64) -> impl FnMut() -> f64 {
+    let mut rng = fastrand::Rng::with_seed(seed);
+    move || rng.f64()
+}
+
 // The log density of a Beta(2, 2), which is -inf outside (0, 1).
 fn log_beta(x: f64) -> f64 {
     if 0.0 < x && x < 1.0 {
@@ -25,7 +31,7 @@ fn stepping_out(x: f64, f: impl FnMut(f64) -> f64, on_log_scale: bool) -> f64 {
         f,
         on_log_scale,
         &tuning_parameters,
-        &mut Some(fastrand::Rng::with_seed(1)),
+        &mut seeded(1),
     )
     .0
 }
@@ -37,21 +43,13 @@ fn doubling(x: f64, f: impl FnMut(f64) -> f64, on_log_scale: bool) -> f64 {
         f,
         on_log_scale,
         &tuning_parameters,
-        &mut Some(fastrand::Rng::with_seed(1)),
+        &mut seeded(1),
     )
     .0
 }
 
 fn shrinkage(x: f64, f: impl FnMut(f64) -> f64, on_log_scale: bool) -> f64 {
-    univariate_slice_sampler_shrinkage(
-        x,
-        f,
-        on_log_scale,
-        0.0,
-        1.0,
-        &mut Some(fastrand::Rng::with_seed(1)),
-    )
-    .0
+    univariate_slice_sampler_shrinkage(x, f, on_log_scale, 0.0, 1.0, &mut seeded(1)).0
 }
 
 #[test]
@@ -114,13 +112,13 @@ fn stepping_out_from_nan() {
 #[test]
 #[should_panic(expected = "the starting point 1.5 must be in the finite interval from 0 to 1")]
 fn shrinkage_outside_its_interval() {
-    univariate_slice_sampler_shrinkage(1.5, |_| 0.0, true, 0.0, 1.0, &mut None);
+    univariate_slice_sampler_shrinkage(1.5, |_| 0.0, true, 0.0, 1.0, &mut seeded(1));
 }
 
 #[test]
 #[should_panic(expected = "must be in the finite interval from 0 to inf")]
 fn shrinkage_on_an_infinite_interval() {
-    univariate_slice_sampler_shrinkage(1.0, |_| 0.0, true, 0.0, f64::INFINITY, &mut None);
+    univariate_slice_sampler_shrinkage(1.0, |_| 0.0, true, 0.0, f64::INFINITY, &mut seeded(1));
 }
 
 #[test]
@@ -134,7 +132,7 @@ fn shrinkage_on_an_interval_whose_width_overflows() {
         true,
         -f64::MAX,
         f64::MAX,
-        &mut None,
+        &mut seeded(1),
     );
 }
 

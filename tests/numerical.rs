@@ -12,27 +12,39 @@ use slice_sampler::univariate::stepping_out::{
 use slice_sampler::univariate::{NumericalError, SliceError};
 use std::error::Error;
 
+// Draws from the uniform distribution on [0, 1), from a seeded generator.
+fn seeded(seed: u64) -> impl FnMut() -> f64 {
+    let mut rng = fastrand::Rng::with_seed(seed);
+    move || rng.f64()
+}
+
 type Sampler = fn(
     f64,
     f64,
     u32,
     &mut dyn FnMut(f64) -> Result<f64, ()>,
-    &mut Option<fastrand::Rng>,
+    &mut dyn FnMut() -> f64,
 ) -> Result<(f64, u32), SliceError<()>>;
 
 fn samplers() -> [(&'static str, Sampler); 2] {
     [
-        ("stepping out", |x, width, limit, f, rng| {
+        ("stepping out", |x, width, limit, f, uniform| {
             let parameters = SteppingOutParameters::new()
                 .width(width)
                 .max_number_of_steps(limit);
-            try_univariate_slice_sampler_stepping_out_and_shrinkage(x, f, true, &parameters, rng)
+            try_univariate_slice_sampler_stepping_out_and_shrinkage(
+                x,
+                f,
+                true,
+                &parameters,
+                uniform,
+            )
         }),
-        ("doubling", |x, width, limit, f, rng| {
+        ("doubling", |x, width, limit, f, uniform| {
             let parameters = DoublingParameters::new()
                 .width(width)
                 .max_number_of_doubles(limit);
-            try_univariate_slice_sampler_doubling_and_shrinkage(x, f, true, &parameters, rng)
+            try_univariate_slice_sampler_doubling_and_shrinkage(x, f, true, &parameters, uniform)
         }),
     ]
 }
@@ -47,13 +59,7 @@ fn an_initial_interval_must_have_a_representable_width() {
                     calls += 1;
                     if calls < 32 { Ok(0.0) } else { Err(()) }
                 };
-                let result = sampler(
-                    x,
-                    width,
-                    limit,
-                    &mut target,
-                    &mut Some(fastrand::Rng::with_seed(1)),
-                );
+                let result = sampler(x, width, limit, &mut target, &mut seeded(1));
                 assert_eq!(result, Err(SliceError::Numerical(NumericalError)), "{name}");
                 assert_eq!(
                     calls, 1,
@@ -89,7 +95,7 @@ fn an_expansion_must_move_its_endpoint() {
                     f64::EPSILON / 2.0,
                     limit,
                     &mut target,
-                    &mut Some(fastrand::Rng::with_seed(seed)),
+                    &mut seeded(seed),
                 );
                 assert_eq!(result, Err(SliceError::Numerical(NumericalError)), "{name}");
                 assert_eq!(
@@ -123,7 +129,7 @@ fn doubling_stops_when_its_acceptance_interval_cannot_be_subdivided() {
         &mut target,
         true,
         &parameters,
-        &mut Some(fastrand::Rng::with_seed(2)),
+        &mut seeded(2),
     );
     assert_eq!(result, Err(SliceError::Numerical(NumericalError)));
     assert!(calls > 3, "failed before the acceptance test");
@@ -139,13 +145,7 @@ fn expansion_overflow_is_an_error_before_evaluating_infinity() {
                 calls += 1;
                 if calls < 32 { Ok(0.0) } else { Err(()) }
             };
-            let result = sampler(
-                0.0,
-                f64::MAX,
-                limit,
-                &mut target,
-                &mut Some(fastrand::Rng::with_seed(1)),
-            );
+            let result = sampler(0.0, f64::MAX, limit, &mut target, &mut seeded(1));
             assert_eq!(result, Err(SliceError::Numerical(NumericalError)), "{name}");
             assert!(calls > 1, "{name}: failed before expansion");
         }
@@ -164,7 +164,7 @@ fn shrinkage_on_a_one_point_interval_gives_its_point() {
             true,
             x,
             x,
-            &mut Some(fastrand::Rng::with_seed(1)),
+            &mut seeded(1),
         );
         assert_eq!(result, Ok((x, 2)));
     }
@@ -190,6 +190,6 @@ fn the_infallible_form_panics_on_a_numerical_failure() {
         |x| -x * x / 2.0,
         true,
         &DoublingParameters::new().width(1e-20),
-        &mut Some(fastrand::Rng::with_seed(1)),
+        &mut seeded(1),
     );
 }

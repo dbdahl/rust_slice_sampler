@@ -46,6 +46,9 @@ impl Default for TuningParameters {
 /// [`try_univariate_slice_sampler_doubling_and_shrinkage`] takes an `f` that
 /// may fail.
 ///
+/// It draws its random numbers by calling `uniform`, which returns draws from
+/// the uniform distribution on [0, 1), as the [module docs](super) explain.
+///
 /// # Panics
 ///
 /// If `x` isn't in the target's support: `x` must be finite, and its density
@@ -54,19 +57,19 @@ impl Default for TuningParameters {
 /// Also panics if floating-point limits prevent interval construction,
 /// expansion, or subdivision; the `try_` form returns [`SliceError::Numerical`]
 /// instead.
-pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
+pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64, U: FnMut() -> f64>(
     x: f64,
     mut f: S,
     on_log_scale: bool,
     tuning_parameters: &TuningParameters,
-    rng: &mut Option<fastrand::Rng>,
+    uniform: U,
 ) -> (f64, u32) {
     super::infallible(try_univariate_slice_sampler_doubling_and_shrinkage(
         x,
         |x| Ok(f(x)),
         on_log_scale,
         tuning_parameters,
-        rng,
+        uniform,
     ))
 }
 
@@ -75,8 +78,9 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
 /// `f`, which may fail. It returns the new point and the number of
 /// evaluations of `f`.
 ///
-/// See the [module examples](super) for propagating errors and using
-/// infallible targets.
+/// It draws its random numbers by calling `uniform`, which returns draws from
+/// the uniform distribution on [0, 1). See the [module docs](super) for
+/// choosing a generator, propagating errors, and using infallible targets.
 ///
 /// # Errors
 ///
@@ -92,27 +96,19 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
 /// # Panics
 ///
 /// If `x` isn't finite.
-pub fn try_univariate_slice_sampler_doubling_and_shrinkage<E, S>(
+pub fn try_univariate_slice_sampler_doubling_and_shrinkage<E, S, U>(
     x: f64,
     mut f: S,
     on_log_scale: bool,
     tuning_parameters: &TuningParameters,
-    rng: &mut Option<fastrand::Rng>,
+    mut uniform: U,
 ) -> Result<(f64, u32), SliceError<E>>
 where
     S: FnMut(f64) -> Result<f64, E>,
+    U: FnMut() -> f64,
 {
     super::check_start(x);
     let w = tuning_parameters.initial_width;
-    let mut maybe;
-    let rng = match rng {
-        Some(rng) => rng,
-        None => {
-            maybe = fastrand::Rng::new();
-            &mut maybe
-        }
-    };
-    let mut u = || rng.f64();
     let mut evaluation_counter = 0;
     let mut f_with_counter = |x: f64| {
         evaluation_counter += 1;
@@ -121,17 +117,17 @@ where
     // Step 1 (slice)
     let y = {
         let fx = f_with_counter(x)?;
-        super::level(x, fx, on_log_scale, u())?
+        super::level(x, fx, on_log_scale, uniform())?
     };
     // Step 2 (doubling while either end is in the slice, as in Neal's Fig. 4)
-    let mut l = x - u() * w;
+    let mut l = x - uniform() * w;
     let mut r = l + w;
     super::check_interval(l, r)?;
     match tuning_parameters.max_number_of_doubles {
         0 => {
             while y < f_with_counter(l)? || y < f_with_counter(r)? {
                 let w = r - l;
-                if u() < 0.5 {
+                if uniform() < 0.5 {
                     super::expand(&mut l, -w)?;
                 } else {
                     super::expand(&mut r, w)?;
@@ -144,7 +140,7 @@ where
             while k > 0 && (y < f_with_counter(l)? || y < f_with_counter(r)?) {
                 k -= 1;
                 let w = r - l;
-                if u() < 0.5 {
+                if uniform() < 0.5 {
                     super::expand(&mut l, -w)?;
                 } else {
                     super::expand(&mut r, w)?;
@@ -155,7 +151,7 @@ where
     }
     // Step 3 (shrinkage)
     loop {
-        let x1 = l + u() * (r - l);
+        let x1 = l + uniform() * (r - l);
         let fx1 = f_with_counter(x1)?;
         if y < fx1 {
             let mut lp = l;
@@ -198,6 +194,7 @@ mod tests {
 
     #[test]
     fn test_triangle_distribution() {
+        let mut rng = fastrand::Rng::with_seed(1);
         let mut sum = 0.0;
         let n_samples = 100_000;
         let tuning_parameters = TuningParameters::new().width(1.);
@@ -212,7 +209,7 @@ mod tests {
                 },
                 false,
                 &tuning_parameters,
-                &mut None,
+                || rng.f64(),
             );
             total_calls += calls;
             sum += x;

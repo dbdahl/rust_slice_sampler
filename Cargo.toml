@@ -1,10 +1,13 @@
 [package]
 name = "slice_sampler"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+# The examples and tests draw from a seeded fastrand generator.
+[dev-dependencies]
 fastrand = "2.0"
