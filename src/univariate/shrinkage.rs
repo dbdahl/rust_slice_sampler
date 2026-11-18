@@ -12,6 +12,8 @@ use super::SliceError;
 /// isn't in the target's support: its density must be positive and finite
 /// (or its log density finite if `on_log_scale`). Otherwise the shrinkage
 /// procedure may never end.
+/// Also panics if the interval's width is zero or overflows; the `try_`
+/// form returns [`SliceError::Numerical`] instead.
 pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -45,6 +47,7 @@ pub fn univariate_slice_sampler_shrinkage<S: FnMut(f64) -> f64>(
 /// support: its density must be positive and finite (or its log density
 /// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
 /// end.
+/// [`SliceError::Numerical`] if the interval's width is zero or overflows.
 ///
 /// # Panics
 ///
@@ -64,6 +67,7 @@ where
         left.is_finite() && right.is_finite() && left <= x && x <= right,
         "the starting point {x} must be in the finite interval from {left} to {right}"
     );
+    super::check_interval(left, right)?;
     let mut maybe;
     let rng = match rng {
         Some(rng) => rng,

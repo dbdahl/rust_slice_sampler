@@ -179,7 +179,7 @@ fn errors_display_and_chain() {
 #[test]
 fn an_infallible_target_needs_no_error_handling() {
     let tuning_parameters = SteppingOutParameters::new();
-    // With an infallible target, only an invalid start is an error.
+    // With an infallible target, only the sampler's own errors are possible.
     let result = try_univariate_slice_sampler_stepping_out_and_shrinkage(
         0.5,
         |x| Ok::<_, Infallible>(log_beta(x)),
@@ -191,6 +191,7 @@ fn an_infallible_target_needs_no_error_handling() {
         Ok(draw) => draw,
         Err(SliceError::Target(never)) => match never {},
         Err(SliceError::InvalidStart(e)) => panic!("{e}"),
+        Err(SliceError::Numerical(e)) => panic!("{e}"),
     };
     assert!(0.0 < x && x < 1.0);
 }

@@ -51,6 +51,8 @@ impl Default for TuningParameters {
 /// If `x` isn't in the target's support: `x` must be finite, and its density
 /// positive and finite (or its log density finite if `on_log_scale`).
 /// Otherwise the shrinkage procedure may never end.
+/// Also panics if floating-point limits prevent interval construction or
+/// expansion; the `try_` form returns [`SliceError::Numerical`] instead.
 pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -82,6 +84,8 @@ pub fn univariate_slice_sampler_stepping_out_and_shrinkage<S: FnMut(f64) -> f64>
 /// support: its density must be positive and finite (or its log density
 /// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
 /// end.
+/// [`SliceError::Numerical`] if the interval collapses, overflows, or an
+/// expansion cannot move an endpoint at floating-point precision.
 ///
 /// # Panics
 ///
@@ -120,13 +124,14 @@ where
     // Step 2 (stepping out, unless max_number_of_steps == 1)
     let mut l = x - u() * w;
     let mut r = l + w;
+    super::check_interval(l, r)?;
     match tuning_parameters.max_number_of_steps {
         0 => {
             while y < f_with_counter(l)? {
-                l -= w
+                super::expand(&mut l, -w)?;
             }
             while y < f_with_counter(r)? {
-                r += w
+                super::expand(&mut r, w)?;
             }
         }
         1 => {}
@@ -134,16 +139,17 @@ where
             let mut j = (u() * (tuning_parameters.max_number_of_steps as f64)).floor() as u32;
             let mut k = tuning_parameters.max_number_of_steps - 1 - j;
             while j > 0 && y < f_with_counter(l)? {
-                l -= w;
+                super::expand(&mut l, -w)?;
                 j -= 1;
             }
             while k > 0 && y < f_with_counter(r)? {
-                r += w;
+                super::expand(&mut r, w)?;
                 k -= 1;
             }
         }
     }
     // Step 3 (shrinkage)
+    super::check_interval(l, r)?;
     loop {
         let x1 = l + u() * (r - l);
         let fx1 = f_with_counter(x1)?;

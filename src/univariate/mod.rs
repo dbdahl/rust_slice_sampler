@@ -2,7 +2,8 @@
 //!
 //! Each sampler has a `try_` form that accepts a target returning
 //! `Result<f64, E>`. A target error stops the sampler immediately. An invalid
-//! starting density returns [`SliceError::InvalidStart`].
+//! starting density returns [`SliceError::InvalidStart`]. An interval that
+//! collapses, overflows, or cannot advance returns [`SliceError::Numerical`].
 //!
 //! # Fallible targets
 //!
@@ -39,28 +40,25 @@
 //!
 //! To return an error for an invalid starting density even when the target
 //! cannot fail, use a `try_` form with [`std::convert::Infallible`]. Annotating
-//! `Ok` specifies the target's error type. Only `InvalidStart` needs handling:
+//! `Ok` specifies the target's error type. The sampler's own errors can still
+//! occur:
 //!
 //! ```
 //! use slice_sampler::univariate::shrinkage::try_univariate_slice_sampler_shrinkage;
-//! use slice_sampler::univariate::{InvalidStart, SliceError};
+//! use slice_sampler::univariate::SliceError;
 //! use std::convert::Infallible;
 //!
-//! fn draw(x: f64) -> Result<f64, InvalidStart> {
+//! fn draw(x: f64) -> Result<f64, SliceError<Infallible>> {
 //!     let mut rng = Some(fastrand::Rng::with_seed(1));
-//!     let result = try_univariate_slice_sampler_shrinkage(
+//!     let (x, _) = try_univariate_slice_sampler_shrinkage(
 //!         x,
 //!         |x| Ok::<_, Infallible>(x),
 //!         false,
 //!         0.0,
 //!         1.0,
 //!         &mut rng,
-//!     );
-//!     match result {
-//!         Ok((x, _)) => Ok(x),
-//!         Err(SliceError::Target(never)) => match never {},
-//!         Err(SliceError::InvalidStart(error)) => Err(error),
-//!     }
+//!     )?;
+//!     Ok(x)
 //! }
 //!
 //! let x = draw(0.5).unwrap();
@@ -85,6 +83,9 @@ pub enum SliceError<E> {
     Target(E),
     /// The starting point isn't in the target's support.
     InvalidStart(InvalidStart),
+    /// Floating-point limits prevent interval construction, expansion, or
+    /// subdivision.
+    Numerical(NumericalError),
 }
 
 impl<E: fmt::Display> fmt::Display for SliceError<E> {
@@ -92,6 +93,7 @@ impl<E: fmt::Display> fmt::Display for SliceError<E> {
         match self {
             SliceError::Target(e) => write!(f, "the target failed: {e}"),
             SliceError::InvalidStart(e) => e.fmt(f),
+            SliceError::Numerical(e) => e.fmt(f),
         }
     }
 }
@@ -102,7 +104,7 @@ impl<E: Error + 'static> Error for SliceError<E> {
             // Display already shows the target's error, so the chain
             // continues from its source, and no message appears twice.
             SliceError::Target(e) => e.source(),
-            SliceError::InvalidStart(_) => None,
+            SliceError::InvalidStart(_) | SliceError::Numerical(_) => None,
         }
     }
 }
@@ -139,6 +141,41 @@ impl fmt::Display for InvalidStart {
 }
 
 impl Error for InvalidStart {}
+
+/// The interval collapsed, its width or an endpoint overflowed, or an
+/// expansion or subdivision rounded back to the same endpoint. Rescale the
+/// variable or change the initial width so that the interval can advance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NumericalError;
+
+impl fmt::Display for NumericalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("floating-point limits prevent the slice sampler from making progress")
+    }
+}
+
+impl Error for NumericalError {}
+
+// A finite, positive width is needed both for sampling and for doubling.
+pub(crate) fn check_interval<E>(left: f64, right: f64) -> Result<(), SliceError<E>> {
+    let width = right - left;
+    if width > 0.0 && width.is_finite() {
+        Ok(())
+    } else {
+        Err(SliceError::Numerical(NumericalError))
+    }
+}
+
+// An expansion must move its endpoint. In particular, a positive initial
+// width can still be too small to change an endpoint after rounding.
+pub(crate) fn expand<E>(endpoint: &mut f64, change: f64) -> Result<(), SliceError<E>> {
+    let next = *endpoint + change;
+    if next == *endpoint || !next.is_finite() {
+        return Err(SliceError::Numerical(NumericalError));
+    }
+    *endpoint = next;
+    Ok(())
+}
 
 // The starting point must be finite, which callers can check without
 // evaluating the target, so a violation is a bug in the caller: panic before
@@ -181,6 +218,7 @@ pub(crate) fn infallible<T>(result: Result<T, SliceError<Infallible>>) -> T {
         Ok(value) => value,
         Err(SliceError::Target(never)) => match never {},
         Err(SliceError::InvalidStart(e)) => panic!("{e}"),
+        Err(SliceError::Numerical(e)) => panic!("{e}"),
     }
 }
 

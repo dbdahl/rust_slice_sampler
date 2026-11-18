@@ -1,4 +1,4 @@
-use super::SliceError;
+use super::{NumericalError, SliceError};
 
 #[derive(Debug)]
 pub struct TuningParameters {
@@ -51,6 +51,9 @@ impl Default for TuningParameters {
 /// If `x` isn't in the target's support: `x` must be finite, and its density
 /// positive and finite (or its log density finite if `on_log_scale`).
 /// Otherwise the shrinkage procedure may never end.
+/// Also panics if floating-point limits prevent interval construction,
+/// expansion, or subdivision; the `try_` form returns [`SliceError::Numerical`]
+/// instead.
 pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
     x: f64,
     mut f: S,
@@ -82,6 +85,9 @@ pub fn univariate_slice_sampler_doubling_and_shrinkage<S: FnMut(f64) -> f64>(
 /// support: its density must be positive and finite (or its log density
 /// finite if `on_log_scale`). Otherwise the shrinkage procedure might never
 /// end.
+/// [`SliceError::Numerical`] if the interval collapses, overflows, or an
+/// expansion or subdivision cannot move an endpoint at floating-point
+/// precision.
 ///
 /// # Panics
 ///
@@ -120,15 +126,17 @@ where
     // Step 2 (doubling while either end is in the slice, as in Neal's Fig. 4)
     let mut l = x - u() * w;
     let mut r = l + w;
+    super::check_interval(l, r)?;
     match tuning_parameters.max_number_of_doubles {
         0 => {
             while y < f_with_counter(l)? || y < f_with_counter(r)? {
                 let w = r - l;
                 if u() < 0.5 {
-                    l -= w;
+                    super::expand(&mut l, -w)?;
                 } else {
-                    r += w;
+                    super::expand(&mut r, w)?;
                 }
+                super::check_interval(l, r)?;
             }
         }
         _ => {
@@ -137,10 +145,11 @@ where
                 k -= 1;
                 let w = r - l;
                 if u() < 0.5 {
-                    l -= w;
+                    super::expand(&mut l, -w)?;
                 } else {
-                    r += w;
+                    super::expand(&mut r, w)?;
                 }
+                super::check_interval(l, r)?;
             }
         }
     }
@@ -155,6 +164,9 @@ where
             let mut accept = true;
             while rp - lp > 1.1 * w {
                 let m = (lp + rp) / 2.0;
+                if !(lp < m && m < rp) {
+                    return Err(SliceError::Numerical(NumericalError));
+                }
                 if (x < m && x1 >= m) || (x >= m && x1 < m) {
                     d = true;
                 }
