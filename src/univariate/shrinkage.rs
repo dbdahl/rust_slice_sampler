@@ -86,10 +86,10 @@ where
         f(x).map_err(SliceError::Target)
     };
     // Step 1 (slice)
-    let y = {
+    let (level, height) = {
         let u: f64 = uniform();
         let fx = f_with_counter(x)?;
-        super::level(x, fx, on_log_scale, u)?
+        super::slice_level(x, fx, on_log_scale, u)?
     };
     // Step 3 (shrinkage)
     let mut l = left;
@@ -97,7 +97,7 @@ where
     loop {
         let x1 = l + uniform() * (r - l);
         let fx1 = f_with_counter(x1)?;
-        if y < fx1 {
+        if level < height(fx1) {
             return Ok((x1, evaluation_counter));
         }
         if x1 < x {

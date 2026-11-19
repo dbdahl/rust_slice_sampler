@@ -193,3 +193,41 @@ fn the_infallible_form_panics_on_a_numerical_failure() {
         &mut seeded(1),
     );
 }
+
+#[test]
+fn a_uniform_plateau_is_invariant_to_the_density_scale() {
+    for (_, sampler) in samplers() {
+        let draw = |height| {
+            let mut calls = 0;
+            let mut target = |x: f64| {
+                calls += 1;
+                if calls > 100 {
+                    return Err(());
+                }
+                Ok(if x.abs() <= 1.0 {
+                    height
+                } else {
+                    f64::NEG_INFINITY
+                })
+            };
+            sampler(0.0, 1.0, 0, &mut target, &mut seeded(1)).unwrap()
+        };
+        assert_eq!(draw(0.0), draw(-1e20));
+    }
+
+    for (height, log) in [(-1e20, true), (f64::from_bits(1), false)] {
+        let mut calls = 0;
+        let result = try_univariate_slice_sampler_shrinkage(
+            0.0,
+            |_| {
+                calls += 1;
+                if calls > 2 { Err(()) } else { Ok(height) }
+            },
+            log,
+            -1.0,
+            1.0,
+            || 0.75,
+        );
+        assert_eq!(result, Ok((0.5, 2)));
+    }
+}

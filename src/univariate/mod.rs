@@ -197,15 +197,26 @@ pub(crate) fn check_start(x: f64) {
     );
 }
 
-// The level that defines the slice through the starting point 'x': 'u' times
-// its density 'fx', or ln(u) plus its log density, for a uniform 'u'.
+// The slice through the starting point 'x', for a uniform 'u': the points
+// whose density is above 'u' times its density 'fx', or whose log density is
+// above ln(u) plus 'fx'. This returns the level, ln(u) or 'u', and a function
+// giving a density's height relative to 'fx', as a difference of log
+// densities or a ratio of densities; a point is in the slice when the level
+// is below its height. Adding ln(u) to a large log density can round back to
+// that density, and 'u' times a subnormal density can round back to it,
+// which would exclude even 'x' and every point of a flat slice.
 //
 // The shrinkage procedure ends because the points near 'x' are above the
 // level, which needs 'x' to be in the target's support: a positive, finite
 // density. Otherwise no point may be above the level, as when the log density
 // is -inf or NaN, and the shrinkage would never end. Callers can't tell
 // without evaluating the target, so this is an error, not a panic.
-pub(crate) fn level<E>(x: f64, fx: f64, on_log_scale: bool, u: f64) -> Result<f64, SliceError<E>> {
+fn slice_level<E>(
+    x: f64,
+    fx: f64,
+    on_log_scale: bool,
+    u: f64,
+) -> Result<(f64, impl Fn(f64) -> f64), SliceError<E>> {
     let in_support = if on_log_scale {
         fx.is_finite()
     } else {
@@ -218,7 +229,19 @@ pub(crate) fn level<E>(x: f64, fx: f64, on_log_scale: bool, u: f64) -> Result<f6
             on_log_scale,
         }));
     }
-    Ok(if on_log_scale { u.ln() + fx } else { u * fx })
+    let threshold = if on_log_scale { u.ln() } else { u };
+    let height = move |value| {
+        // At a zero uniform draw, use the original height so that a finite
+        // log difference or a positive ratio cannot round out of support.
+        if u == 0.0 {
+            value
+        } else if on_log_scale {
+            value - fx
+        } else {
+            value / fx
+        }
+    };
+    Ok((threshold, height))
 }
 
 // The result of a 'try_' form whose target can't fail. The infallible forms

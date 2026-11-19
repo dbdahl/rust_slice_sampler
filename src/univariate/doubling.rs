@@ -115,9 +115,9 @@ where
         f(x).map_err(SliceError::Target)
     };
     // Step 1 (slice)
-    let y = {
+    let (level, height) = {
         let fx = f_with_counter(x)?;
-        super::level(x, fx, on_log_scale, uniform())?
+        super::slice_level(x, fx, on_log_scale, uniform())?
     };
     // Step 2 (doubling while either end is in the slice, as in Neal's Fig. 4)
     let mut l = x - uniform() * w;
@@ -125,7 +125,7 @@ where
     super::check_interval(l, r)?;
     match tuning_parameters.max_number_of_doubles {
         0 => {
-            while y < f_with_counter(l)? || y < f_with_counter(r)? {
+            while level < height(f_with_counter(l)?) || level < height(f_with_counter(r)?) {
                 let w = r - l;
                 if uniform() < 0.5 {
                     super::expand(&mut l, -w)?;
@@ -137,7 +137,9 @@ where
         }
         _ => {
             let mut k = tuning_parameters.max_number_of_doubles;
-            while k > 0 && (y < f_with_counter(l)? || y < f_with_counter(r)?) {
+            while k > 0
+                && (level < height(f_with_counter(l)?) || level < height(f_with_counter(r)?))
+            {
                 k -= 1;
                 let w = r - l;
                 if uniform() < 0.5 {
@@ -153,7 +155,7 @@ where
     loop {
         let x1 = l + uniform() * (r - l);
         let fx1 = f_with_counter(x1)?;
-        if y < fx1 {
+        if level < height(fx1) {
             let mut lp = l;
             let mut rp = r;
             let mut d = false;
@@ -171,7 +173,8 @@ where
                 } else {
                     lp = m;
                 }
-                if d && y >= f_with_counter(lp)? && y >= f_with_counter(rp)? {
+                if d && level >= height(f_with_counter(lp)?) && level >= height(f_with_counter(rp)?)
+                {
                     accept = false;
                     break;
                 }

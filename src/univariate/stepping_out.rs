@@ -116,9 +116,9 @@ where
         f(x).map_err(SliceError::Target)
     };
     // Step 1 (slice)
-    let y = {
+    let (level, height) = {
         let fx = f_with_counter(x)?;
-        super::level(x, fx, on_log_scale, uniform())?
+        super::slice_level(x, fx, on_log_scale, uniform())?
     };
     // Step 2 (stepping out, unless max_number_of_steps == 1)
     let mut l = x - uniform() * w;
@@ -126,10 +126,10 @@ where
     super::check_interval(l, r)?;
     match tuning_parameters.max_number_of_steps {
         0 => {
-            while y < f_with_counter(l)? {
+            while level < height(f_with_counter(l)?) {
                 super::expand(&mut l, -w)?;
             }
-            while y < f_with_counter(r)? {
+            while level < height(f_with_counter(r)?) {
                 super::expand(&mut r, w)?;
             }
         }
@@ -137,11 +137,11 @@ where
         _ => {
             let mut j = (uniform() * (tuning_parameters.max_number_of_steps as f64)).floor() as u32;
             let mut k = tuning_parameters.max_number_of_steps - 1 - j;
-            while j > 0 && y < f_with_counter(l)? {
+            while j > 0 && level < height(f_with_counter(l)?) {
                 super::expand(&mut l, -w)?;
                 j -= 1;
             }
-            while k > 0 && y < f_with_counter(r)? {
+            while k > 0 && level < height(f_with_counter(r)?) {
                 super::expand(&mut r, w)?;
                 k -= 1;
             }
@@ -152,7 +152,7 @@ where
     loop {
         let x1 = l + uniform() * (r - l);
         let fx1 = f_with_counter(x1)?;
-        if y < fx1 {
+        if level < height(fx1) {
             return Ok((x1, evaluation_counter));
         }
         if x1 < x {
